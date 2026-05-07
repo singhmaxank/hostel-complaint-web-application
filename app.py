@@ -4,7 +4,6 @@ import sqlite3
 import os
 
 app = Flask(__name__)
-# A secret key is required to keep client-side sessions secure
 app.secret_key = os.urandom(24) 
 
 def get_db_connection():
@@ -16,13 +15,10 @@ def get_db_connection():
 def index():
     return render_template('index.html')
 
-# --- AUTHENTICATION ROUTES ---
-
 @app.route('/api/signup', methods=['POST'])
 def signup():
     data = request.get_json()
     hashed_pw = generate_password_hash(data['password'])
-    
     conn = get_db_connection()
     try:
         conn.execute(
@@ -52,9 +48,7 @@ def login():
         return jsonify({
             'message': 'Login successful', 
             'role': user['role'],
-            'full_name': user['full_name'],
-            'email': user['email'],
-            'roll_number': user['roll_number']
+            'full_name': user['full_name']
         }), 200
     else:
         return jsonify({'error': 'Invalid email or password'}), 401
@@ -74,9 +68,6 @@ def get_current_user():
             'roll_number': session['roll_number']
         })
     return jsonify({'error': 'Not logged in'}), 401
-
-
-# --- COMPLAINTS ROUTES ---
 
 @app.route('/api/complaints', methods=['GET', 'POST'])
 def manage_complaints():
@@ -100,18 +91,17 @@ def manage_complaints():
 
     elif request.method == 'GET':
         if session['role'] == 'student':
-            # Students only see their own complaints
             complaints = conn.execute('SELECT * FROM complaints WHERE college_email = ? ORDER BY date_submitted DESC', (session['email'],)).fetchall()
         else:
-            # Admins/Teachers see all complaints
             complaints = conn.execute('SELECT * FROM complaints ORDER BY date_submitted DESC').fetchall()
         conn.close()
         return jsonify([dict(ix) for ix in complaints])
 
+# --- UPDATED: ONLY ADMINS CAN CHANGE STATUS ---
 @app.route('/api/complaints/<int:id>', methods=['PATCH'])
 def update_complaint(id):
-    if session.get('role') not in ['admin', 'teacher']:
-        return jsonify({'error': 'Unauthorized action'}), 403
+    if session.get('role') != 'admin':
+        return jsonify({'error': 'Unauthorized action. Admins only.'}), 403
 
     data = request.get_json()
     conn = get_db_connection()
